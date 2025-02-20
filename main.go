@@ -24,7 +24,7 @@ type command struct {
 }
 
 type commands struct {
-	cmdName map[string]func(*state, command) error
+	cmdName map[string]func(*state, command, string) error
 }
 
 func getConfigFilePath(cfgpath string) (string, error){
@@ -96,5 +96,9 @@ func main(){
 	newState := state{
 		cfg: &readCfg,
 	}
-	
+	cmdMap := make(map[string]func(s *state, cmd command, cfgPath string) error )
+	cmdMap["login"] = handlerLogin
+	newCommands := commands{
+		cmdName: cmdMap,
+	}
 }
