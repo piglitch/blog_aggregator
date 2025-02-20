@@ -23,6 +23,10 @@ type command struct {
 	args []string
 }
 
+type commands struct {
+	cmdName map[string]func(*state, command) error
+}
+
 func getConfigFilePath(cfgpath string) (string, error){
 	homeDir := "/mnt/f/blog_aggregator/"
 	configPath := filepath.Join(homeDir, cfgpath)
@@ -61,22 +65,36 @@ func (cfg *Config) SetUser(userName string, cfgPath string) error {
 	return nil
 }
 
-func handlerLogin(s *state, cmd command) error {
+func handlerLogin(s *state, cmd command, cfgPath string) error {
 	if len(cmd.args) == 0 {
 		return errors.New("No arguments passed in args")
 	}
-	
+	err := s.cfg.SetUser(cmd.name, cfgPath)
+	if err != nil {
+		return err
+	}
+	fmt.Println("User has been set")
+	return nil
 }
 
+func (c *commands) register(name string, f func(*state, command) error) {
+
+}
+
+func (c *commands) run(s *state, cmd command) error {
+
+}
+
+
+
 func main(){
-	var cfg Config
 	const configFileName = "gatorconfig.json"
-	cfg, err := Read(configFileName)
+	readCfg, err := Read(configFileName)
 	if err != nil {
 		return 
 	}
-	userName := "Avi Banerjee"
-	cfg.SetUser(userName, configFileName)
-
-
+	newState := state{
+		cfg: &readCfg,
+	}
+	
 }
