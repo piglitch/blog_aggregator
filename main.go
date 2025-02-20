@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +12,15 @@ import (
 type Config struct {
 	DbUrl string `json:"db_url"`
 	CurrentUser string `json:"current_user_name"`
+}
+
+type state struct {
+	cfg *Config
+}
+
+type command struct {
+	name string
+	args []string
 }
 
 func getConfigFilePath(cfgpath string) (string, error){
@@ -51,6 +61,13 @@ func (cfg *Config) SetUser(userName string, cfgPath string) error {
 	return nil
 }
 
+func handlerLogin(s *state, cmd command) error {
+	if len(cmd.args) == 0 {
+		return errors.New("No arguments passed in args")
+	}
+	
+}
+
 func main(){
 	var cfg Config
 	const configFileName = "gatorconfig.json"
@@ -60,6 +77,6 @@ func main(){
 	}
 	userName := "Avi Banerjee"
 	cfg.SetUser(userName, configFileName)
-	fmt.Println("Output: ")
-	fmt.Print(cfg.CurrentUser,"\n", cfg.DbUrl, "\n")
+
+
 }
