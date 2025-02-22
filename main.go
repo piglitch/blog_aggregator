@@ -1,10 +1,14 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 	"os"
+	"time"
+
+	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 	"main.go/internal/config"
@@ -31,16 +35,49 @@ type commands struct {
 }
 
 func handlerLogin(s *state, cmd command, cfgPath string) error {
-	fmt.Println("handlerLogin: cfgPath =", cfgPath) // Added fmt.Println
 	if len(cmd.args) == 0 {
 		os.Exit(1)
 		return errors.New("no arguments passed in args")
 	}
-	err := s.cfg.SetUser(cmd.args[0], cfgPath)
+	_, err := s.db.GetUser(context.Background(), cmd.args[0])
+	if err != nil {
+		fmt.Println("user does not exist")
+		os.Exit(1)
+	}
+	err = s.cfg.SetUser(cmd.args[0], cfgPath)
 	if err != nil {
 		return err
 	}
 	fmt.Println("User has been set")
+	return nil
+}
+
+func registerHandler(s *state, cmd command, cfgPath string) error {
+	type user struct {
+		ID uuid.UUID
+		CreatedAt time.Time
+		UpdatedAt time.Time
+		Name string
+	}
+	newUser := user{
+		ID: uuid.New(),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		Name: cmd.args[0],
+	}
+	getUser, err := s.db.GetUser(context.Background(), newUser.Name)
+	if err != nil {
+		println(err, newUser.Name)
+	}
+	println(newUser.Name, getUser.Name)
+	if getUser.Name == newUser.Name {
+		fmt.Println("user already exists")
+		os.Exit(1)
+	}
+	_, err = s.db.CreateUser(context.Background(), database.CreateUserParams(newUser))
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -51,7 +88,7 @@ func (c *commands) register(name string, f func(*state, command, string) error) 
 
 func (c *commands) run(s *state, cmd command) error {
 	const configFileName = ".gatorconfig.json"
-	err := handlerLogin(s, cmd, configFileName)
+	err := c.cmdName[cmd.name](s, cmd, configFileName) 
 	if err != nil {
 		fmt.Println(err)
 		return err
@@ -86,6 +123,7 @@ func main() {
 		cmdName: cmdMap,
 	}
 	newCommands.register("login", handlerLogin)
+	newCommands.register("register", registerHandler)
 	cliArgs := os.Args
 	if len(cliArgs) < 2 {
 		fmt.Println("insufficient args")
@@ -96,7 +134,6 @@ func main() {
 		name: cliArgs[1],
 		args: cliArgs[2:],
 	}
-	fmt.Println(newCliCmd.name, newCliCmd.args)
 	err = newCommands.run(&newState, newCliCmd)
 	if err != nil {
 		fmt.Println(err)
