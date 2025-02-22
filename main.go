@@ -74,10 +74,15 @@ func registerHandler(s *state, cmd command, cfgPath string) error {
 		fmt.Println("user already exists")
 		os.Exit(1)
 	}
-	_, err = s.db.CreateUser(context.Background(), database.CreateUserParams(newUser))
+	dbUser, err := s.db.CreateUser(context.Background(), database.CreateUserParams(newUser))
 	if err != nil {
 		return err
 	}
+	err = s.cfg.SetUser(dbUser.Name, cfgPath)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("User has been set and registered. CurrentUser: %s", dbUser.Name)
 	return nil
 }
 
