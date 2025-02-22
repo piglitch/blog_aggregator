@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"database/sql"
@@ -104,48 +104,4 @@ func (c *commands) run(s *state, cmd command) error {
 		return err
 	}
 	return nil
-}
-
-func main() {
-	err := godotenv.Load()
-	if err != nil {
-		return
-	}
-	dbURL := os.Getenv("DB_URL")
-	db, err := sql.Open("postgres", dbURL)
-	if err != nil {
-		return 
-	}
-	dbQueries := database.New(db)
-	const configFileName = ".gatorconfig.json"
-	readCfg, err := Read(configFileName)
-	if err != nil {
-		return
-	}
-	newState := state{
-		cfg: &readCfg,
-		db: dbQueries,
-	}
-	cmdMap := make(
-		map[string]func(s *state, cmd command, cfgPath string) error,
-	)
-	newCommands := commands{
-		cmdName: cmdMap,
-	}
-	newCommands.register("login", handlerLogin)
-	cliArgs := os.Args
-	if len(cliArgs) < 2 {
-		fmt.Println("insufficient args")
-		os.Exit(1)
-		return
-	}
-	newCliCmd := command{
-		name: cliArgs[1],
-		args: cliArgs[2:],
-	}
-	fmt.Println(newCliCmd.name, newCliCmd.args)
-	err = newCommands.run(&newState, newCliCmd)
-	if err != nil {
-		fmt.Println(err)
-	}
 }
