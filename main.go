@@ -2,14 +2,12 @@ package main
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
-
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
+	"main.go/internal/config"
 	"main.go/internal/database"
 )
 
@@ -20,7 +18,7 @@ type Config struct {
 
 type state struct {
 	db *database.Queries
-	cfg *Config
+	cfg *config.Config
 }
 
 type command struct {
@@ -30,51 +28,6 @@ type command struct {
 
 type commands struct {
 	cmdName map[string]func(*state, command, string) error
-}
-
-func getConfigFilePath(cfgpath string) (string, error) {
-	fmt.Println("getConfigFilePath: cfgpath =", cfgpath) // Added fmt.Println
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		fmt.Println("cannot find home directory")
-		return "", err
-	}
-	configPath := filepath.Join(homeDir, cfgpath)
-	return configPath, nil
-}
-
-func Read(cfgpath string) (Config, error) {
-	fmt.Println("Read: cfgpath =", cfgpath) // Added fmt.Println
-	configPath, err := getConfigFilePath(cfgpath)
-	if err != nil {
-		return Config{}, err
-	}
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return Config{}, err
-	}
-	var cfg Config
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		return Config{}, err
-	}
-	return cfg, nil
-}
-
-func (cfg *Config) SetUser(userName string, cfgPath string) error {
-	fmt.Println("SetUser: cfgPath =", cfgPath) // Added fmt.Println
-	filePath, err := getConfigFilePath(cfgPath)
-	if err != nil {
-		return err
-	}
-	cfg.CurrentUser = userName
-	newData, err := json.MarshalIndent(cfg, "", " ")
-	if err != nil {
-		return err
-	}
-	if err := os.WriteFile(filePath, newData, 0644); err != nil {
-		return err
-	}
-	return nil
 }
 
 func handlerLogin(s *state, cmd command, cfgPath string) error {
@@ -118,7 +71,7 @@ func main() {
 	}
 	dbQueries := database.New(db)
 	const configFileName = ".gatorconfig.json"
-	readCfg, err := Read(configFileName)
+	readCfg, err := config.Read(configFileName)
 	if err != nil {
 		return
 	}
