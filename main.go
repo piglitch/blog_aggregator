@@ -162,16 +162,16 @@ func (c *commands) register(name string, f func(*state, command, string) error) 
 	cmdMap[name] = f
 }
 
-func registerFetch() (*RSSFeed, error) {
+func registerFetch(_ *state, _ command, _ string) error {
 	fmt.Println("entered")
 	s, err := fetchFeed(context.Background(), "https://www.wagslane.dev/index.xml")
 	if err != nil {
-		return nil, err
+		return err
 	}
 	for _, str := range s.Channel.Item {
 		fmt.Println(str)
 	}
-	return s, nil
+	return nil
 }
 
 func (c *commands) run(s *state, cmd command) error {
@@ -214,7 +214,7 @@ func main() {
 	newCommands.register("register", registerHandler)
 	newCommands.register("reset", resetHandler)
 	newCommands.register("users", getUsersHandler)
-
+	newCommands.register("agg", registerFetch)
 	cliArgs := os.Args
 	if len(cliArgs) < 2 {
 		fmt.Println("insufficient args")
@@ -226,10 +226,6 @@ func main() {
 		name: cliArgs[1],
 		args: cliArgs[2:],
 	}
-	if newCliCmd.name == "agg" {
-		registerFetch()
-		return
-	} 
 	err = newCommands.run(&newState, newCliCmd)
 	if err != nil {
 		fmt.Println(err)
