@@ -86,6 +86,30 @@ func registerHandler(s *state, cmd command, cfgPath string) error {
 	return nil
 }
 
+func resetHandler(s *state, cmd command, cfgPath string) error { 
+	err := s.db.ResetDb(context.Background())
+	if err != err {
+		return err
+	}
+	return nil
+}
+
+func getUsersHandler(s *state, cmd command, cfgPath string) error {
+	dbUsers, err := s.db.GetUsers(context.Background())
+	if err != nil {
+		return err
+	}
+	for _, user := range dbUsers {
+		var userName string
+		userName = user.Name
+		if user.Name == s.cfg.CurrentUser {
+			userName = user.Name + " " + "(current)"
+		}
+		fmt.Printf("* %s\n", userName)
+	}
+	return nil
+}
+
 func (c *commands) register(name string, f func(*state, command, string) error) {
 	cmdMap := c.cmdName
 	cmdMap[name] = f
@@ -129,6 +153,8 @@ func main() {
 	}
 	newCommands.register("login", handlerLogin)
 	newCommands.register("register", registerHandler)
+	newCommands.register("reset", resetHandler)
+	newCommands.register("users", getUsersHandler)
 	cliArgs := os.Args
 	if len(cliArgs) < 2 {
 		fmt.Println("insufficient args")
