@@ -6,26 +6,12 @@ import (
 	"os"
 	"path/filepath"
 	_ "github.com/lib/pq"
-	"main.go/internal/database"
 )
+
 
 type Config struct {
 	DbUrl       string `json:"db_url"`
 	CurrentUser string `json:"current_user_name"`
-}
-
-type state struct {
-	db *database.Queries
-	cfg *Config
-}
-
-type command struct {
-	name string
-	args []string
-}
-
-type commands struct {
-	cmdName map[string]func(*state, command, string) error
 }
 
 func getConfigFilePath(cfgpath string) (string, error) {

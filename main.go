@@ -3,8 +3,12 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/xml"
 	"errors"
 	"fmt"
+	"html"
+	"io"
+	"net/http"
 	"os"
 	"time"
 
@@ -32,6 +36,22 @@ type command struct {
 
 type commands struct {
 	cmdName map[string]func(*state, command, string) error
+}
+
+type RSSFeed struct {
+	Channel struct {
+		Title       string    `xml:"title"`
+		Link        string    `xml:"link"`
+		Description string    `xml:"description"`
+		Item        []RSSItem `xml:"item"`
+	} `xml:"channel"`
+}
+
+type RSSItem struct {
+	Title       string `xml:"title"`
+	Link        string `xml:"link"`
+	Description string `xml:"description"`
+	PubDate     string `xml:"pubDate"`
 }
 
 func handlerLogin(s *state, cmd command, cfgPath string) error {
@@ -110,9 +130,48 @@ func getUsersHandler(s *state, cmd command, cfgPath string) error {
 	return nil
 }
 
+func fetchFeed(ctx context.Context, feedURL string) (*RSSFeed, error) {
+	client := &http.Client{}
+	v := RSSFeed{}
+	req, err := http.NewRequestWithContext(ctx, "GET", feedURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "gator")
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}	
+	defer resp.Body.Close()
+	
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	err = xml.Unmarshal(body, &v)
+	if err != nil {
+		return nil, err
+	}
+	v.Channel.Description = html.UnescapeString(v.Channel.Description)
+	v.Channel.Title = html.UnescapeString(v.Channel.Title)
+	return &v, nil
+}
+
 func (c *commands) register(name string, f func(*state, command, string) error) {
 	cmdMap := c.cmdName
 	cmdMap[name] = f
+}
+
+func registerFetch() (*RSSFeed, error) {
+	fmt.Println("entered")
+	s, err := fetchFeed(context.Background(), "https://www.wagslane.dev/index.xml")
+	if err != nil {
+		return nil, err
+	}
+	for _, str := range s.Channel.Item {
+		fmt.Println(str)
+	}
+	return s, nil
 }
 
 func (c *commands) run(s *state, cmd command) error {
@@ -155,16 +214,22 @@ func main() {
 	newCommands.register("register", registerHandler)
 	newCommands.register("reset", resetHandler)
 	newCommands.register("users", getUsersHandler)
+
 	cliArgs := os.Args
 	if len(cliArgs) < 2 {
 		fmt.Println("insufficient args")
 		os.Exit(1)
 		return
 	}
+
 	newCliCmd := command{
 		name: cliArgs[1],
 		args: cliArgs[2:],
 	}
+	if newCliCmd.name == "agg" {
+		registerFetch()
+		return
+	} 
 	err = newCommands.run(&newState, newCliCmd)
 	if err != nil {
 		fmt.Println(err)
