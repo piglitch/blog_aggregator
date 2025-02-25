@@ -11,7 +11,7 @@ import (
 	"github.com/google/uuid"
 )
 
-const addFeed = `-- name: AddFeed :exec
+const addFeed = `-- name: AddFeed :one
 INSERT INTO feeds (id, created_at, updated_at, name, url, user_id)
 VALUES (
   gen_random_uuid(),
@@ -30,7 +30,16 @@ type AddFeedParams struct {
 	UserID uuid.UUID
 }
 
-func (q *Queries) AddFeed(ctx context.Context, arg AddFeedParams) error {
-	_, err := q.db.ExecContext(ctx, addFeed, arg.Name, arg.Url, arg.UserID)
-	return err
+func (q *Queries) AddFeed(ctx context.Context, arg AddFeedParams) (Feed, error) {
+	row := q.db.QueryRowContext(ctx, addFeed, arg.Name, arg.Url, arg.UserID)
+	var i Feed
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Name,
+		&i.Url,
+		&i.UserID,
+	)
+	return i, err
 }
