@@ -80,9 +80,6 @@ func registerHandler(s *state, cmd command, cfgPath string) error {
 		Name string
 	}
 	newUser := user{
-		ID: uuid.New(),
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
 		Name: cmd.args[0],
 	}
 	getUser, err := s.db.GetUser(context.Background(), newUser.Name)
@@ -94,7 +91,7 @@ func registerHandler(s *state, cmd command, cfgPath string) error {
 		fmt.Println("user already exists")
 		os.Exit(1)
 	}
-	dbUser, err := s.db.CreateUser(context.Background(), database.CreateUserParams(newUser))
+	dbUser, err := s.db.CreateUser(context.Background(), newUser.Name)
 	if err != nil {
 		return err
 	}
@@ -126,6 +123,29 @@ func getUsersHandler(s *state, cmd command, cfgPath string) error {
 			userName = user.Name + " " + "(current)"
 		}
 		fmt.Printf("* %s\n", userName)
+	}
+	return nil
+}
+
+func addFeedsHandler(s *state, cmd command, cfgPath string) error {
+	println(cmd.args)
+	type feed struct {
+		Name string
+		Url string
+		UserID uuid.UUID
+	}
+	dbUser, err := s.db.GetUser(context.Background(), s.cfg.CurrentUser)
+	if err != nil {
+		return err
+	}
+	newFeed := feed{
+		Name: cmd.args[0],
+		Url: cmd.args[1],
+		UserID: dbUser.ID,
+	}
+	err = s.db.AddFeed(context.Background(), database.AddFeedParams(newFeed))
+	if err != nil {
+		return err
 	}
 	return nil
 }
@@ -163,8 +183,8 @@ func (c *commands) register(name string, f func(*state, command, string) error) 
 }
 
 func registerFetch(_ *state, _ command, _ string) error {
-	fmt.Println("entered")
-	s, err := fetchFeed(context.Background(), "https://www.wagslane.dev/index.xml")
+	fetchUrl := "https://www.wagslane.dev/index.xml"
+	s, err := fetchFeed(context.Background(), fetchUrl)
 	if err != nil {
 		return err
 	}
@@ -210,11 +230,14 @@ func main() {
 	newCommands := commands{
 		cmdName: cmdMap,
 	}
+
 	newCommands.register("login", handlerLogin)
 	newCommands.register("register", registerHandler)
 	newCommands.register("reset", resetHandler)
 	newCommands.register("users", getUsersHandler)
 	newCommands.register("agg", registerFetch)
+	newCommands.register("addfeed", addFeedsHandler)
+
 	cliArgs := os.Args
 	if len(cliArgs) < 2 {
 		fmt.Println("insufficient args")
