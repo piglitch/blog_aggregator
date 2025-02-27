@@ -103,7 +103,7 @@ func registerHandler(s *state, cmd command, cfgPath string) error {
 	return nil
 }
 
-func resetHandler(s *state, cmd command, cfgPath string) error { 
+func resetHandler(s *state, cmd command, user database.User) error { 
 	err := s.db.ResetDb(context.Background())
 	if err != err {
 		return err
@@ -111,7 +111,7 @@ func resetHandler(s *state, cmd command, cfgPath string) error {
 	return nil
 }
 
-func getUsersHandler(s *state, cmd command, cfgPath string) error {
+func getUsersHandler(s *state, cmd command, user database.User) error {
 	dbUsers, err := s.db.GetUsers(context.Background())
 	if err != nil {
 		return err
@@ -127,7 +127,7 @@ func getUsersHandler(s *state, cmd command, cfgPath string) error {
 	return nil
 }
 
-func addFeedsHandler(s *state, cmd command, cfgPath string) error {
+func addFeedsHandler(s *state, cmd command, user database.User) error {
 	type feed struct {
 		Name string
 		Url string
@@ -188,7 +188,7 @@ func fetchFeed(ctx context.Context, feedURL string) (*RSSFeed, error) {
 	return &v, nil
 }
 
-func geAllFeedsHandler(s *state, cmd command, cfgPath string) error {
+func geAllFeedsHandler(s *state, cmd command, user database.User) error {
 	dbFeeds, err := s.db.GetAllFeeds(context.Background())
 	if err != nil {
 		return err
@@ -206,7 +206,7 @@ func geAllFeedsHandler(s *state, cmd command, cfgPath string) error {
 	return nil
 }
 
-func followRecordHandler(s *state, cmd command, cfgPath string) error {
+func followRecordHandler(s *state, cmd command, user database.User) error {
 	type followParams struct {
 		UserID uuid.UUID
 		FeedID uuid.UUID
@@ -232,8 +232,8 @@ func followRecordHandler(s *state, cmd command, cfgPath string) error {
 	return nil
 }
 
-func getFollowByUserId(s *state, cmd command, cfgPath string) error {
-	dbUser, err := s.db.GetUser(context.Background(), s.cfg.CurrentUser)
+func getFollowByUserId(s *state, cmd command, user database.User) error {
+	dbUser, err := s.db.GetUser(context.Background(), user.Name)
 	if err != nil {
 		return err
 	}
@@ -247,9 +247,18 @@ func getFollowByUserId(s *state, cmd command, cfgPath string) error {
 	return nil
 }
 
-func (c *commands) register(name string, f func(*state, command, string) error) {
-	cmdMap := c.cmdName
-	cmdMap[name] = f
+func middlewareLoggedIn(handler func(s *state, cmd command, user database.User) error) func(*state, command, string) error {
+	return func(s1 *state, c command, s2 string) error {
+		dbUser, err := s1.db.GetUser(context.Background(), s1.cfg.CurrentUser)
+		if err != nil {
+			return err
+		}
+		err = handler(s1, c, dbUser)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
 }
 
 func registerFetch(_ *state, _ command, _ string) error {
@@ -262,6 +271,11 @@ func registerFetch(_ *state, _ command, _ string) error {
 		fmt.Println(str)
 	}
 	return nil
+}
+
+func (c *commands) register(name string, f func(*state, command, string) error) {
+	cmdMap := c.cmdName
+	cmdMap[name] = f
 }
 
 func (c *commands) run(s *state, cmd command) error {
@@ -303,13 +317,13 @@ func main() {
 
 	newCommands.register("login", handlerLogin)
 	newCommands.register("register", registerHandler)
-	newCommands.register("reset", resetHandler)
-	newCommands.register("users", getUsersHandler)
+	newCommands.register("reset", middlewareLoggedIn(resetHandler))
+	newCommands.register("users", middlewareLoggedIn(getUsersHandler))
 	newCommands.register("agg", registerFetch)
-	newCommands.register("addfeed", addFeedsHandler)
-	newCommands.register("feeds", geAllFeedsHandler)
-	newCommands.register("follow", followRecordHandler)
-	newCommands.register("following", getFollowByUserId)
+	newCommands.register("addfeed", middlewareLoggedIn(addFeedsHandler))
+	newCommands.register("feeds", middlewareLoggedIn(geAllFeedsHandler))
+	newCommands.register("follow", middlewareLoggedIn(followRecordHandler))
+	newCommands.register("following", middlewareLoggedIn(getFollowByUserId))
 
 	cliArgs := os.Args
 	if len(cliArgs) < 2 {
