@@ -112,7 +112,7 @@ func resetHandler(s *state, cmd command, user database.User) error {
 	return nil
 }
 
-func getUsersHandler(s *state, cmd command, user database.User) error {
+func getUsersHandler(s *state, cmd command, curr_user database.User) error {
 	dbUsers, err := s.db.GetUsers(context.Background())
 	if err != nil {
 		return err
@@ -120,7 +120,7 @@ func getUsersHandler(s *state, cmd command, user database.User) error {
 	for _, user := range dbUsers {
 		var userName string
 		userName = user.Name
-		if user.Name == s.cfg.CurrentUser {
+		if user.Name == curr_user.Name {
 			userName = user.Name + " " + "(current)"
 		}
 		fmt.Printf("* %s\n", userName)
@@ -138,7 +138,7 @@ func addFeedsHandler(s *state, cmd command, user database.User) error {
 		UserID uuid.UUID
 		FeedID uuid.UUID
 	}
-	dbUser, err := s.db.GetUser(context.Background(), s.cfg.CurrentUser)
+	dbUser, err := s.db.GetUser(context.Background(), user.Name)
 	if err != nil {
 		return err
 	}
@@ -212,16 +212,12 @@ func followRecordHandler(s *state, cmd command, user database.User) error {
 		UserID uuid.UUID
 		FeedID uuid.UUID
 	}
-	dbUser, err := s.db.GetUser(context.Background(), s.cfg.CurrentUser) 
-	if err != nil {
-		return err
-	}
 	dbFeed, err := s.db.GetFeedByUrl(context.Background(), cmd.args[0])
 	if err != nil {
 		return err
 	}
 	newFollowRecord := followParams{
-		UserID: dbUser.ID,
+		UserID: user.ID,
 		FeedID: dbFeed.ID,
 	} 
 	followRecord, err := s.db.CreateFeedFollow(context.Background(), database.CreateFeedFollowParams(newFollowRecord))
@@ -229,7 +225,7 @@ func followRecordHandler(s *state, cmd command, user database.User) error {
 		return err
 	}
 	fmt.Println(followRecord.FeedName)
-	fmt.Println(s.cfg.CurrentUser)
+	fmt.Println(user.Name)
 	return nil
 }
 
@@ -248,7 +244,7 @@ func getFollowByUserId(s *state, cmd command, user database.User) error {
 	return nil
 }
 
-func unfollowFeed(s *state, cmd command, _ string) error {
+func unfollowFeed(s *state, cmd command, user database.User) error {
 	followRec, err := s.db.GetFeedByUrl(context.Background(), cmd.args[0])
 	if err != nil {
 		return err
@@ -284,10 +280,32 @@ func registerFetch(s *state, cmd command, _ string) error {
 		if err != nil {
 			return err
 		}
-		for _, str := range feed.Channel.Item {
-			fmt.Println(str.Title)
-			fmt.Println(" ")
+		for _, item := range feed.Channel.Item {
+			type CreatePostParams struct {
+				Title       string
+				Url         string
+				Description string
+				PublishedAt time.Time
+				FeedID      uuid.UUID
+			}
+			layout := "Mon, 02 Jan 2006 15:04:05 -0700"
+			parsedTime, err := time.Parse(layout, item.PubDate)
+			if err != nil {
+				return err
+			}
+			newPost := CreatePostParams{
+				Title: item.Title,
+				Url: fetchUrl[0].Url,
+				Description: item.Description,
+				PublishedAt: parsedTime,
+				FeedID: dbFeed.ID,
+			}
+			err = s.db.CreatePost(context.Background(), database.CreatePostParams(newPost))
+			if err != nil {
+				fmt.Println(err)
+			}
 		}
+		
 		fmt.Printf("Collecting feeds every %d seconds\n", numSec)
 	}
 }
@@ -342,7 +360,8 @@ func main() {
 	newCommands.register("feeds", middlewareLoggedIn(geAllFeedsHandler))
 	newCommands.register("follow", middlewareLoggedIn(followRecordHandler))
 	newCommands.register("following", middlewareLoggedIn(getFollowByUserId))
-	newCommands.register("unfollow", unfollowFeed)
+	newCommands.register("unfollow", middlewareLoggedIn(unfollowFeed))
+	newCommands.register("browse", middlewareLoggedIn(browsePosts))
 
 	cliArgs := os.Args
 	if len(cliArgs) < 2 {
