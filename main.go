@@ -247,27 +247,51 @@ func getFollowByUserId(s *state, cmd command, user database.User) error {
 	return nil
 }
 
-func middlewareLoggedIn(handler func(s *state, cmd command, user database.User) error) func(*state, command, string) error {
-	return func(s1 *state, c command, s2 string) error {
-		dbUser, err := s1.db.GetUser(context.Background(), s1.cfg.CurrentUser)
-		if err != nil {
-			return err
-		}
-		err = handler(s1, c, dbUser)
-		if err != nil {
-			return err
-		}
-		return nil
-	}
-}
-
-func registerFetch(_ *state, _ command, _ string) error {
-	fetchUrl := "https://www.wagslane.dev/index.xml"
-	s, err := fetchFeed(context.Background(), fetchUrl)
+func unfollowFeed(s *state, cmd command, _ string) error {
+	followRec, err := s.db.GetFeedByUrl(context.Background(), cmd.args[0])
 	if err != nil {
 		return err
 	}
-	for _, str := range s.Channel.Item {
+	err = s.db.DeleteFollow(context.Background(), followRec.ID)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// func middlewareLoggedIn(handler func(s *state, cmd command, user database.User) error) func(*state, command, string) error {
+// 	return func(s1 *state, c command, s2 string) error {
+// 		dbUser, err := s1.db.GetUser(context.Background(), s1.cfg.CurrentUser)
+// 		if err != nil {
+// 			return err
+// 		}
+// 		err = handler(s1, c, dbUser)
+// 		if err != nil {
+// 			return err
+// 		}
+// 		return nil
+// 	}
+// }
+
+func registerFetch(s *state, cmd command, _ string) error {
+	//fetchUrl := []string{"https://blog.boot.dev/index.xml", "https://news.ycombinator.com/rss", "https://techcrunch.com/feed/"}
+	fetchUrl, err := s.db.GetNextFeed(context.Background())
+	if err != nil {
+		return err
+	}
+	feed, err := fetchFeed(context.Background(), fetchUrl[0].Url)
+	if err != nil {
+		return err
+	}
+	dbFeed, err := s.db.GetFeedByUrl(context.Background(), fetchUrl[0].Url)
+	if err != nil {
+		return err
+	}
+	err = s.db.MarkFeedFetched(context.Background(), dbFeed.ID)
+	if err != nil {
+		return err
+	}
+	for _, str := range feed.Channel.Item {
 		fmt.Println(str)
 	}
 	return nil
@@ -324,6 +348,7 @@ func main() {
 	newCommands.register("feeds", middlewareLoggedIn(geAllFeedsHandler))
 	newCommands.register("follow", middlewareLoggedIn(followRecordHandler))
 	newCommands.register("following", middlewareLoggedIn(getFollowByUserId))
+	newCommands.register("unfollow", unfollowFeed)
 
 	cliArgs := os.Args
 	if len(cliArgs) < 2 {
