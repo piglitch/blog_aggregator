@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -259,44 +260,37 @@ func unfollowFeed(s *state, cmd command, _ string) error {
 	return nil
 }
 
-// func middlewareLoggedIn(handler func(s *state, cmd command, user database.User) error) func(*state, command, string) error {
-// 	return func(s1 *state, c command, s2 string) error {
-// 		dbUser, err := s1.db.GetUser(context.Background(), s1.cfg.CurrentUser)
-// 		if err != nil {
-// 			return err
-// 		}
-// 		err = handler(s1, c, dbUser)
-// 		if err != nil {
-// 			return err
-// 		}
-// 		return nil
-// 	}
-// }
-
 func registerFetch(s *state, cmd command, _ string) error {
-	//fetchUrl := []string{"https://blog.boot.dev/index.xml", "https://news.ycombinator.com/rss", "https://techcrunch.com/feed/"}
-	fetchUrl, err := s.db.GetNextFeed(context.Background())
+	numSec, err := strconv.Atoi(cmd.args[0])
 	if err != nil {
 		return err
 	}
-	feed, err := fetchFeed(context.Background(), fetchUrl[0].Url)
-	if err != nil {
-		return err
+	ticker := time.NewTicker(time.Duration(numSec) * time.Second)
+	for ; ; <- ticker.C {
+		fetchUrl, err := s.db.GetNextFeed(context.Background())
+		if err != nil {
+			return err
+		}
+		fmt.Println("Fetching from: ", fetchUrl[0].Url)
+		feed, err := fetchFeed(context.Background(), fetchUrl[0].Url)
+		if err != nil {
+			return err
+		}
+		dbFeed, err := s.db.GetFeedByUrl(context.Background(), fetchUrl[0].Url)
+		if err != nil {
+			return err
+		}
+		err = s.db.MarkFeedFetched(context.Background(), dbFeed.ID)
+		if err != nil {
+			return err
+		}
+		for _, str := range feed.Channel.Item {
+			fmt.Println(str.Title)
+			fmt.Println(" ")
+		}
+		fmt.Printf("Collecting feeds every %d seconds\n", numSec)
 	}
-	dbFeed, err := s.db.GetFeedByUrl(context.Background(), fetchUrl[0].Url)
-	if err != nil {
-		return err
-	}
-	err = s.db.MarkFeedFetched(context.Background(), dbFeed.ID)
-	if err != nil {
-		return err
-	}
-	for _, str := range feed.Channel.Item {
-		fmt.Println(str)
-	}
-	return nil
 }
-
 func (c *commands) register(name string, f func(*state, command, string) error) {
 	cmdMap := c.cmdName
 	cmdMap[name] = f

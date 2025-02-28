@@ -11,7 +11,7 @@ import (
 
 const getNextFeed = `-- name: GetNextFeed :many
 SELECT id, created_at, updated_at, name, url, user_id, last_fetched_at FROM feeds
-ORDER BY last_fetched_at ASC
+ORDER BY last_fetched_at ASC NULLS FIRST
 LIMIT 1
 `
 
